@@ -15,7 +15,7 @@ import java.util.Iterator;
 public class GameWorld {
 
     public final float WORLD_GRAVITY = -9.8f * 200; // 초당 중력 값
-    public final float FLOOR_LEVEL = 0;          // 바닥의 Y 좌표
+    public final float FLOOR_LEVEL = 100;          // 바닥의 Y 좌표
     public int moveAmount;
 
     // --- 2. 월드 객체 ---
