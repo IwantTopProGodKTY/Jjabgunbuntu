@@ -13,6 +13,9 @@ public class GameCharacter {
     public Sprite sprite;    // 그리기용 스프라이트
     public boolean isGrounded = false; // '땅에 닿아있는가?' (점프 가능 여부)
 
+    public boolean isMovingRight = false;
+    public boolean isMovingLeft = false;
+
     /**
      * 캐릭터 생성자
      * @param texture 이 캐릭터가 사용할 텍스처 (외부에서 로드해서 전달)
@@ -37,10 +40,14 @@ public class GameCharacter {
 
     // --- 3. 행동 (메서드) ---
     public void moveRight() {
-        position.x += 7;
+        //position.x += 7;
+        isMovingRight = true;
+        isMovingLeft = false;
     }
     public void moveLeft() {
-        position.x -= 7;
+        //position.x -= 7;
+        isMovingRight = false;
+        isMovingLeft = true;
     }
 
     public void syncSpriteToPosition() {

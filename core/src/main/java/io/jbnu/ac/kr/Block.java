@@ -8,8 +8,8 @@ import com.badlogic.gdx.math.Vector2;
 
 public class Block
 {
-    public static int BlockWidth = 80;
-    public static int BlockHeight = 80;
+    public static int BlockWidth = 50;
+    public static int BlockHeight = 50;
     public Sprite sprite;
 
     // 충돌 판정을 위한 사각 영역

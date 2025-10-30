@@ -15,8 +15,7 @@ import java.util.Iterator;
 public class GameWorld {
 
     public final float WORLD_GRAVITY = -9.8f * 200; // 초당 중력 값
-    public final float FLOOR_LEVEL = 100;          // 바닥의 Y 좌표
-    public int moveAmount;
+    public final float FLOOR_LEVEL = 0;          // 바닥의 Y 좌표
 
     // --- 2. 월드 객체 ---
     private GameCharacter player;
@@ -60,22 +59,34 @@ public class GameWorld {
     }
 
     public void update(float delta) {
+        float moveAmount = 0;
+
+        // 1. 이동 방향에 따른 고정 이동 값 설정
+        if (player.isMovingRight) {
+            moveAmount = 7;
+        } else if (player.isMovingLeft) {
+            moveAmount = -7;
+        } else {
+            return; // 이동 입력이 없으면 함수 종료
+        }
+
         // --- 1. 힘 적용 (중력, 저항) ---
         player.velocity.y += WORLD_GRAVITY * delta;
         updateSpawning(delta);
 
         // --- 2. '예상' 위치 계산 ---
         float expectedX = player.position.x + moveAmount;
+        float newY = player.position.y + player.velocity.y * delta;
 
         //충돌 검사를 위해 임시 위치로 이동
         player.sprite.setX(expectedX);
-
         Rectangle playerBounds = player.sprite.getBoundingRectangle();
+
         boolean collison = false;
 
         // (이번 프레임에 이동할 거리)
-        float newX = player.position.x + player.velocity.x * delta;
-        float newY = player.position.y + player.velocity.y * delta;
+        //float newX = player.position.x + player.velocity.x * delta;
+
 
         for (Iterator<CoinObject> iter = objects.iterator(); iter.hasNext(); ) {
             CoinObject obj = iter.next();
@@ -123,15 +134,13 @@ public class GameWorld {
 
         if(!collison)
         {
-            player.position.set(newX,newY);
-        }
-        else {
-            player.sprite.setX(player.position.x);
-            player.position.y = newY;
+            player.position.x = expectedX;
         }
 
 
 
+        player.sprite.setX(player.position.x);
+        player.position.set(player.position.x,newY);
         // --- 6. 그래픽 동기화 ---
         player.syncSpriteToPosition();
     }
