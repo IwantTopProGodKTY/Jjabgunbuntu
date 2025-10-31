@@ -38,7 +38,7 @@ public class Main extends ApplicationAdapter {
     private Texture blockTexture; // 블록 텍스쳐
     private Texture startTexture;
     private BitmapFont scoreFont;
-    private boolean
+    private boolean reFlag; //R키를 눌렀을때 모든 월드를 초기화하기
 
     //카메라
     private OrthographicCamera camera;
@@ -86,7 +86,7 @@ public class Main extends ApplicationAdapter {
 
 
         currentState = GameState.START;
-
+        reFlag = false;
 
 
 
@@ -112,8 +112,16 @@ public class Main extends ApplicationAdapter {
             updateEffect(Gdx.graphics.getDeltaTime());
         }
 
+        // R키를 눌렀을때
+        if(reFlag)
+        {
+            Level = 1;
+            NewWorld(Level);
+            reFlag = false;
+        }
+
         // LEVEL 에 따른 스테이지 변화
-        else if (world.getScore() == 10) {
+        if (world.getScore() == 10) {
             Level *= 2;
             NewWorld(Level);
         }
@@ -178,6 +186,7 @@ public class Main extends ApplicationAdapter {
             if(Gdx.input.isKeyJustPressed(Keys.R))
             {
                 currentState = GameState.START;
+                reFlag = true;
                 resetCameraForStartScreen();
             }
         }
