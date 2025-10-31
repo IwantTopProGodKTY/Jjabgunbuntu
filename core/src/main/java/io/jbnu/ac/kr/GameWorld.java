@@ -41,6 +41,7 @@ public class GameWorld {
 
 
 
+
     private float worldWidth; // 랜덤 위치 생성을 위해 월드 너비 저장
 
     public GameWorld(Texture playerTexture, Texture objectTexture, Texture blockTexture, float worldWidth, int level) {

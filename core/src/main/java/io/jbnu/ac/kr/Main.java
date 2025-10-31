@@ -1,6 +1,7 @@
 package io.jbnu.ac.kr;
 
 import com.badlogic.gdx.ApplicationAdapter;
+import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.audio.Sound;
@@ -35,7 +36,9 @@ public class Main extends ApplicationAdapter {
     private Texture playerTexture;
     private Texture pauseTexture;
     private Texture blockTexture; // 블록 텍스쳐
+    private Texture startTexture;
     private BitmapFont scoreFont;
+    private boolean
 
     //카메라
     private OrthographicCamera camera;
@@ -47,9 +50,11 @@ public class Main extends ApplicationAdapter {
     private final float WORLD_HEIGHT = 720;
 
     private enum GameState {
+        START,
         RUNNING,
         PAUSE,
-        CLEARED
+        CLEARED,
+        GAMEOVER,
     }
 
     GameState currentState;
@@ -63,20 +68,24 @@ public class Main extends ApplicationAdapter {
         objectTexture = new Texture("coin.jpg");
         pauseTexture = new Texture("pause.png");
         blockTexture = new Texture("block.png");
+        startTexture = new Texture("start.png");
 
         //월드 생성
         world = new GameWorld(playerTexture, objectTexture, blockTexture, this.WORLD_WIDTH, Level);
-        //카메라 흔들림 제어 클래스 생성
+
+
+
         camera = new OrthographicCamera();
-        viewport = new FitViewport(800, 600, camera);
-        camera.setToOrtho(false, 800, 600);
+        viewport = new FitViewport(1280, 720, camera);
+        camera.setToOrtho(false, 1280, 720);
+        //카메라 흔들림 제어 클래스 생성
         camManager = new CameraManager(camera);
 
         scoreFont = new BitmapFont(); // 기본 비트맵 폰트 생성
         scoreFont.getData().setScale(2);
 
 
-        currentState = GameState.RUNNING;
+        currentState = GameState.START;
 
 
 
@@ -98,12 +107,13 @@ public class Main extends ApplicationAdapter {
         if (currentState == GameState.RUNNING) {
             world.update(Gdx.graphics.getDeltaTime());
         }
+        // 깃발에 닿았을때
         if (currentState == GameState.CLEARED) {
             updateEffect(Gdx.graphics.getDeltaTime());
         }
 
         // LEVEL 에 따른 스테이지 변화
-        if (world.getScore() == 10) {
+        else if (world.getScore() == 10) {
             Level *= 2;
             NewWorld(Level);
         }
@@ -115,38 +125,62 @@ public class Main extends ApplicationAdapter {
         batch.begin();
 
 
-        camera.position.set(world.getPlayer().position.x, camera.position.y, 0);
-        camera.update();
 
 
-        batch.setProjectionMatrix(viewport.getCamera().combined);
+
+        if(currentState != GameState.START) {
+
+            camera.position.set(world.getPlayer().position.x, camera.position.y, 0);
+            camera.update();
+            batch.setProjectionMatrix(viewport.getCamera().combined);
+
+            world.getPlayer().draw(batch);
+            for (CoinObject obj : world.getObjects()) {
+                obj.draw(batch);
+            }
+
+            // 깃발 및 블록 그리기
+            for (Block block : world.getBlock()) {
+                block.draw(batch);
+            }
+            world.getFlag().draw(batch);
+
+            scoreFont.draw(batch, "Score: " + world.getScore(), 20, WORLD_HEIGHT - 20);
 
 
-        world.getPlayer().draw(batch);
-        for (CoinObject obj : world.getObjects()) {
-            obj.draw(batch);
+            //Pause 이미지 그리기
+            if (currentState == GameState.PAUSE) {
+                batch.draw(pauseTexture, 640 - (pauseTexture.getWidth() / 2), 360 - (pauseTexture.getHeight() / 2));
+            }
         }
+        else {
+            camera.position.set(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 0);
+            camera.update();
+            batch.setProjectionMatrix(camera.combined);
 
-        // 깃발 및 블록 그리기
-        for (Block block : world.getBlock()) {
-            block.draw(batch);
+            batch.draw(startTexture, 640 - (startTexture.getWidth()/2), 360 - (startTexture.getHeight()/2));
         }
-        world.getFlag().draw(batch);
-
-        scoreFont.draw(batch, "Score: " + world.getScore(), 20, WORLD_HEIGHT - 20);
-
-
-        //Pause 이미지 그리기
-        if (currentState == GameState.PAUSE) {
-            batch.draw(pauseTexture, 640 - (pauseTexture.getWidth() / 2), 360 - (pauseTexture.getHeight() / 2));
-        }
-
         batch.end();
 
     }
 
     private void input() {
 
+        if(currentState == GameState.START)
+        {
+            if(Gdx.input.isKeyJustPressed(Keys.S))
+            {
+                currentState = GameState.RUNNING;
+            }
+        }
+        else
+        {
+            if(Gdx.input.isKeyJustPressed(Keys.R))
+            {
+                currentState = GameState.START;
+                resetCameraForStartScreen();
+            }
+        }
         if (Gdx.input.isKeyPressed(Keys.RIGHT) && currentState == GameState.RUNNING) {
             world.onPlayerRight();
 
@@ -163,6 +197,7 @@ public class Main extends ApplicationAdapter {
         if (Gdx.input.isKeyPressed(Keys.ESCAPE)) {
             currentState = GameState.RUNNING;
         }
+
 
     }
 
@@ -205,4 +240,16 @@ public class Main extends ApplicationAdapter {
     public void updateEffect(float delta) {
         camManager.updateShake(delta);
     }
+
+    public void resetCameraForStartScreen() {
+        // 원하는 위치에 카메라 중앙 지정
+        camera.position.set(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 0);
+        camera.zoom = 1f; // 기본 줌값
+        camera.update();
+
+        // 뷰포트도 카메라에 맞춰 업데이트
+        viewport.setWorldSize(WORLD_WIDTH, WORLD_HEIGHT);
+        viewport.apply(true);
+    }
+
 }

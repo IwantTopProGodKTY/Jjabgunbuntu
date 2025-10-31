@@ -11,6 +11,8 @@ public class GameCharacter {
     public Vector2 velocity; // 속도
     // --- 2. 그래픽 (데이터) ---
     public Sprite sprite;    // 그리기용 스프라이트
+
+    public int Hp;
     public boolean isGrounded = false; // '땅에 닿아있는가?' (점프 가능 여부)
 
     public boolean isMovingRight = false;
@@ -60,4 +62,10 @@ public class GameCharacter {
     public void draw(SpriteBatch batch) {
         sprite.draw(batch);
     }
+
+    public int getHp()
+    {
+        return Hp;
+    }
+
 }
