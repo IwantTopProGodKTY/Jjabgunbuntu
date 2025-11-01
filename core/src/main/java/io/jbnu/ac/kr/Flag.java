@@ -8,7 +8,7 @@ import com.badlogic.gdx.math.Vector2;
 
 public class Flag {
     public static int flagWidth = 80;
-    public static int flagHeight = 100;
+    public static int flagHeight = 200;
     public Sprite sprite;
 
     // 충돌 판정을 위한 사각 영역

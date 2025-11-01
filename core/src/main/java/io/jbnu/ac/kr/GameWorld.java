@@ -1,48 +1,36 @@
 package io.jbnu.ac.kr;
 
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.Batch;
-import com.badlogic.gdx.graphics.g2d.Sprite;
-import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.Array;
-
-import java.security.Key;
 import java.util.Iterator;
 
 public class GameWorld {
+    public final float WORLD_GRAVITY = -9.8f * 200;
+    public final float FLOOR_LEVEL = 100;
+    public final float DEATH_LINE = 0;
 
-    public final float WORLD_GRAVITY = -9.8f * 200; // 초당 중력 값
-    public final float FLOOR_LEVEL = 0;          // 바닥의 Y 좌표
-
-    // --- 2. 월드 객체 ---
     private GameCharacter player;
-
-    private final float OBJECT_SPAWN_TIME = 2.0f; // 2초마다 오브젝트 생성
-    private float objectSpawnTimer = OBJECT_SPAWN_TIME; // 타이머
-    private Array<CoinObject> objects; // 떨어지는 오브젝트들을 담을 배열
-    private Array<Block> blocks; // 레벨에 배치될 오브젝트를 담은 배열
-
+    private Array<Block> blocks;
+    private Array<Rectangle> pits;
+    private Array<CoinObject> objects;
     private Flag flag;
+
     private int score;
-
     public int Level;
-
     public boolean isGameClear = false;
-
-
+    public boolean isGameOver = false;
 
     private Texture playerTexture;
     private Texture objectTexture;
     private Texture blockTexture;
 
+    private float worldWidth;
 
-
-
-
-    private float worldWidth; // 랜덤 위치 생성을 위해 월드 너비 저장
+    // 무적 시간 관련
+    private float invincibleTimer = 0f;
+    private final float INVINCIBLE_TIME = 2f; // 2초 무적
 
     public GameWorld(Texture playerTexture, Texture objectTexture, Texture blockTexture, float worldWidth, int level) {
         this.playerTexture = playerTexture;
@@ -50,204 +38,201 @@ public class GameWorld {
         this.blockTexture = blockTexture;
         this.worldWidth = worldWidth;
 
-        player = new GameCharacter(playerTexture, worldWidth / 2, FLOOR_LEVEL);
+        player = new GameCharacter(playerTexture, 100, FLOOR_LEVEL);
         objects = new Array<>();
         blocks = new Array<>();
+        pits = new Array<>();
+
         score = 0;
         Level = level;
+        invincibleTimer = 0f;
 
-        loadGround(level * 2,350);
+        loadGround(level);
     }
 
     public void update(float delta) {
-        float moveAmount = 0;
+        if(isGameOver || isGameClear) return;
 
-        // 1. 이동 방향에 따른 고정 이동 값 설정
-        if (player.isMovingRight) {
-            moveAmount = 7;
-        } else if (player.isMovingLeft) {
-            moveAmount = -7;
-        } else {
-            return; // 이동 입력이 없으면 함수 종료
+        float moveAmount = 7; // 자동 오른쪽 이동
+
+        // 중력 적용
+        player.velocity.y += WORLD_GRAVITY * delta;
+
+        // 무적 시간 감소
+        if(invincibleTimer > 0) {
+            invincibleTimer -= delta;
         }
 
-        // --- 1. 힘 적용 (중력, 저항) ---
-        player.velocity.y += WORLD_GRAVITY * delta;
-        updateSpawning(delta);
-
-        // --- 2. '예상' 위치 계산 ---
-        float expectedX = player.position.x + moveAmount;
+        // Y축 이동 (중력)
         float newY = player.position.y + player.velocity.y * delta;
 
-        //충돌 검사를 위해 임시 위치로 이동
-        player.sprite.setX(expectedX);
-        Rectangle playerBounds = player.sprite.getBoundingRectangle();
+        // 바닥 및 낭떠러지 충돌 검사 (Y 위치 결정)
+        checkFloorAndPitCollision(newY);
 
-        boolean collison = false;
+        // X축 이동
+        player.position.x += moveAmount;
+        player.sprite.setX(player.position.x);
 
-        // (이번 프레임에 이동할 거리)
-        //float newX = player.position.x + player.velocity.x * delta;
-
-
-        for (Iterator<CoinObject> iter = objects.iterator(); iter.hasNext(); ) {
-            CoinObject obj = iter.next();
-            obj.update(delta);
-            // 화면 밖으로 나간 오브젝트는 제거
-            if (obj.position.y < FLOOR_LEVEL - obj.sprite.getHeight()) {
-                iter.remove();
-            }
+        // 장애물 충돌 검사 (무적 시간 중이 아닐 때만)
+        if(invincibleTimer <= 0) {
+            checkBlockCollision();
         }
 
-        // --- 3 & 4. 충돌 검사 및 반응 ---
-        for(Block block : blocks)
-        {
-            if(playerBounds.overlaps(block.getBounds())) {
-                collison = true;
+        // 코인 충돌 검사
+        checkCoinCollision();
 
+        // 깃발 충돌 검사
+        checkFlagCollision();
 
-                if (moveAmount > 0) {
-                    player.position.x = block.getBounds().x - player.sprite.getWidth();
-                } else if (moveAmount < 0) {
-                    player.position.x = block.getBounds().x + block.getBounds().width;
-                }
+        // Y < 0이면 게임오버 (낭떠러지)
+        if(player.position.y < DEATH_LINE) {
+            isGameOver = true;
+            System.out.println("Fell into pit! GAME OVER");
+        }
 
+        // 체력 <= 0이면 게임오버
+        if(player.Hp <= 0) {
+            isGameOver = true;
+            System.out.println("HP 0! GAME OVER");
+        }
+
+        player.syncSpriteToPosition();
+    }
+
+    // 바닥 및 낭떠러지 충돌 처리
+    private void checkFloorAndPitCollision(float newY) {
+        Rectangle playerBounds = new Rectangle(player.position.x, newY,
+            player.sprite.getWidth(), player.sprite.getHeight());
+
+        boolean inPit = false;
+
+        // 낭떠러지 구간에 플레이어가 있는지 확인
+        for(Rectangle pit : pits) {
+            if(playerBounds.overlaps(pit)) {
+                inPit = true;
                 break;
             }
         }
 
-
-
-        // 스크린 바닥(FLOOR_LEVEL)과 충돌 검사
-        if (newY <= FLOOR_LEVEL) {
-            newY = FLOOR_LEVEL;       // 바닥에 강제 고정
-            player.velocity.y = 0;    // Y축 속도 리셋
-            player.isGrounded = true; // '땅에 닿음' 상태로 변경
+        // 낭떠러지가 아니면 바닥에 고정
+        if(!inPit) {
+            if(newY <= FLOOR_LEVEL) {
+                player.position.y = FLOOR_LEVEL;
+                player.velocity.y = 0;
+                player.isGrounded = true;
+            } else {
+                player.position.y = newY;
+                player.isGrounded = false;
+            }
         } else {
-            player.isGrounded = false; // 공중에 떠 있음
-        }
-
-        checkCollisions();
-
-        // --- 5. 최종 위치 확정 ---
-
-        // 모든 충돌 계산이 끝난 '최종' 위치를 반영
-
-
-        if(!collison)
-        {
-            player.position.x = expectedX;
-        }
-
-
-
-        player.sprite.setX(player.position.x);
-        player.position.set(player.position.x,newY);
-        // --- 6. 그래픽 동기화 ---
-        player.syncSpriteToPosition();
-    }
-
-
-
-
-    private void updateSpawning(float delta) {
-        objectSpawnTimer -= delta;
-        if (objectSpawnTimer <= 0) {
-            objectSpawnTimer = OBJECT_SPAWN_TIME; // 타이머 리셋
-
-            // 월드 너비 안에서 랜덤한 X 위치 선정
-            //float randomX = MathUtils.random(0, worldWidth - objectTexture.getWidth());
-            float randomX = MathUtils.random(0, worldWidth - CoinObject.CoinWidth);
-            float startY = 720; // 월드 높이 (예시)
-            float speed = -100f; // 떨어지는 속도
-
-            System.out.println(objectTexture.getWidth());
-
-            CoinObject newObject = new CoinObject(objectTexture, randomX, startY, speed*Level);
-            objects.add(newObject);
+            // 낭떠러지 구간이면 그냥 떨어짐
+            player.position.y = newY;
+            player.isGrounded = false;
         }
     }
 
-    private void checkCollisions() {
-        // 플레이어와 떨어지는 오브젝트들의 충돌 검사
-        for (Iterator<CoinObject> iter = objects.iterator(); iter.hasNext(); ) {
-            CoinObject obj = iter.next();
-            if (player.sprite.getBoundingRectangle().overlaps(obj.bounds)) {
-                // 충돌 발생!
-                score++; // 점수 1점 증가
-                System.out.println("Score: " + score); // 콘솔에 점수 출력 (테스트용)
-                iter.remove(); // 충돌한 오브젝트는 즉시 제거
+    // 장애물 충돌 검사
+    private void checkBlockCollision() {
+        Rectangle playerBounds = player.sprite.getBoundingRectangle();
+
+        for(Block block : blocks) {
+            if(playerBounds.overlaps(block.getBounds())) {
+                // 체력 1 감소
+                player.Hp--;
+
+                // 무적 시간 부여 (2초 동안 충돌 안함)
+                invincibleTimer = INVINCIBLE_TIME;
+
+                // 뒤로 밀려남
+                player.position.x -= 80; // 더 멀리 밀려남
+                player.velocity.y = 300f; // 약간 위로 튕김
+
+                System.out.println("Hit Block! HP: " + player.Hp + " | Invincible for " + INVINCIBLE_TIME + "s");
+                break;
             }
         }
     }
 
+    // 코인 충돌 검사
+    private void checkCoinCollision() {
+        Rectangle playerBounds = player.sprite.getBoundingRectangle();
 
+        Iterator<CoinObject> iter = objects.iterator();
+        while(iter.hasNext()) {
+            CoinObject coin = iter.next();
+            if(playerBounds.overlaps(coin.bounds)) {
+                score += 10;
+                System.out.println("Coin! Score: " + score);
+                iter.remove();
+            }
+        }
+    }
 
-    // 레벨에 따라 블록을
-    private void loadGround(int numberOfBlock, float spaceSize )
-    {
-        float starX = 400 - Block.BlockWidth/2;
-        float starY = 0;
+    // 깃발 충돌 검사
+    private void checkFlagCollision() {
+        if(player.sprite.getBoundingRectangle().overlaps(flag.bounds)) {
+            isGameClear = true;
+            score += 100; // 완주 보너스
+            System.out.println("Stage " + Level + " Clear! Total Score: " + score);
+        }
+    }
 
-        for (int i = 0; i<numberOfBlock; i++)
-        {
-            float x = starX + (i*spaceSize);
+    // 레벨별 맵 생성
+    private void loadGround(int level) {
+        blocks.clear();
+        pits.clear();
+        objects.clear();
 
-            blocks.add(new Block(x,starY, blockTexture));
-            //blocks.add(new Block(x,starY+350, blockTexture));
+        switch(level) {
+            case 1:
+                // 1스테이지: 장애물만
+                blocks.add(new Block(500, FLOOR_LEVEL, blockTexture));
+                blocks.add(new Block(1000, FLOOR_LEVEL, blockTexture));
+                blocks.add(new Block(1500, FLOOR_LEVEL, blockTexture));
+                System.out.println("=== Stage 1 Loaded ===");
+                break;
+
+            case 2:
+                // 2스테이지: 낭떠러지와 장애물 번갈아
+                for(int i = 0; i < 7; i++) {
+                    float x = 250 + (250 * i);
+                    if(i % 2 == 0) {
+                        pits.add(new Rectangle(x, 0, 100, FLOOR_LEVEL));
+                        System.out.println("Pit at x=" + x);
+                    } else {
+                        blocks.add(new Block(x, FLOOR_LEVEL, blockTexture));
+                        System.out.println("Block at x=" + x);
+                    }
+                }
+                System.out.println("=== Stage 2 Loaded ===");
+                break;
+
+            case 3:
+                // 3스테이지: 낭떠러지, 장애물, 코인
+                for(int i = 0; i < 7; i++) {
+                    float x = 250 + (250 * i);
+                    if(i % 2 == 0) {
+                        pits.add(new Rectangle(x, 0, 100, FLOOR_LEVEL));
+                    } else {
+                        blocks.add(new Block(x, FLOOR_LEVEL, blockTexture));
+                        objects.add(new CoinObject(objectTexture, x + 10, FLOOR_LEVEL + 70, 0));
+                    }
+                }
+                System.out.println("=== Stage 3 Loaded ===");
+                break;
         }
 
-        flag = new Flag(blocks.get(numberOfBlock-1).bounds.x + 400f,0,new Texture("flag.png"));
-
+        // 깃발 생성
+        flag = new Flag(1999, FLOOR_LEVEL, new Texture("flag.png"));
     }
 
-    public boolean isGameClear()
-    {
-        if(player.sprite.getBoundingRectangle().overlaps(flag.bounds))
-            return true;
-        else
-            return false;
-    }
-
-    public int getScore() {
-        return score;
-    }
-
-    public Array<CoinObject> getObjects() {
-        return objects;
-    }
-
-    public  Array<Block> getBlock(){
-        return blocks;
-    }
-
-    // GameScreen으로부터 '점프' 입력을 받음
-    public void onPlayerJump() {
-        player.jump();
-    }
-
-    public void onPlayerLeft() {
-        player.moveLeft();
-    }
-
-    public void onPlayerRight() {
-        player.moveRight();
-    }
-
-    // GameScreen이 그릴 수 있도록 객체를 제공
-    public GameCharacter getPlayer() {
-        return player;
-    }
-
-    public  Flag getFlag()
-    {
-        return flag;
-    }
-
-
-
-
-
-
-
-
+    // Getter들
+    public int getScore() { return score; }
+    public Array<CoinObject> getObjects() { return objects; }
+    public Array<Block> getBlock() { return blocks; }
+    public Array<Rectangle> getPits() { return pits; }
+    public GameCharacter getPlayer() { return player; }
+    public Flag getFlag() { return flag; }
+    public void onPlayerJump() { player.jump(); }
+    public boolean isGameClear() { return isGameClear; }
 }

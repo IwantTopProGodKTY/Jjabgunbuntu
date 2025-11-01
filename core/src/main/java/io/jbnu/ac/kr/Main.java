@@ -11,6 +11,7 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
@@ -18,6 +19,7 @@ import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
+
 
 import java.security.Key;
 import java.util.Random;
@@ -44,6 +46,7 @@ public class Main extends ApplicationAdapter {
     private OrthographicCamera camera;
     private Viewport viewport;
     public CameraManager camManager;
+    private ShapeRenderer shapeRenderer;
 
 
     private final float WORLD_WIDTH = 1280;
@@ -54,7 +57,7 @@ public class Main extends ApplicationAdapter {
         RUNNING,
         PAUSE,
         CLEARED,
-        GAMEOVER,
+        STAGECLEARED,
     }
 
     GameState currentState;
@@ -69,6 +72,7 @@ public class Main extends ApplicationAdapter {
         pauseTexture = new Texture("pause.png");
         blockTexture = new Texture("block.png");
         startTexture = new Texture("start.png");
+        shapeRenderer = new ShapeRenderer();
 
         //월드 생성
         world = new GameWorld(playerTexture, objectTexture, blockTexture, this.WORLD_WIDTH, Level);
@@ -102,113 +106,151 @@ public class Main extends ApplicationAdapter {
     }
 
     private void logic() {
-
-        // PAUSE
-        if (currentState == GameState.RUNNING) {
+        if(currentState == GameState.RUNNING) {
             world.update(Gdx.graphics.getDeltaTime());
-        }
-        // 깃발에 닿았을때
-        if (currentState == GameState.CLEARED) {
-            updateEffect(Gdx.graphics.getDeltaTime());
+
+            // 게임오버 체크
+            if(world.isGameOver) {
+                currentState = GameState.START;
+            }
         }
 
-        // R키를 눌렀을때
-        if(reFlag)
-        {
+        if(currentState == GameState.STAGECLEARED) {
+            if(Level < 3) {
+                Level++;
+                NewWorld(Level);
+                currentState = GameState.RUNNING;
+            } else {
+                currentState = GameState.CLEARED;
+            }
+        }
+
+        if(reFlag) {
             Level = 1;
             NewWorld(Level);
+            currentState = GameState.RUNNING;
             reFlag = false;
         }
-
-        // LEVEL 에 따른 스테이지 변화
-        if (world.getScore() == 10) {
-            Level *= 2;
-            NewWorld(Level);
-        }
-
-
     }
+
 
     private void draw() {
         batch.begin();
 
-
-
-
-
-        if(currentState != GameState.START) {
-
+        if(currentState == GameState.RUNNING || currentState == GameState.PAUSE) {
             camera.position.set(world.getPlayer().position.x, camera.position.y, 0);
             camera.update();
             batch.setProjectionMatrix(viewport.getCamera().combined);
 
+            // 오브젝트 그리기 (batch 상태에서)
             world.getPlayer().draw(batch);
-            for (CoinObject obj : world.getObjects()) {
+
+            for(CoinObject obj : world.getObjects()) {
                 obj.draw(batch);
             }
 
-            // 깃발 및 블록 그리기
-            for (Block block : world.getBlock()) {
+            for(Block block : world.getBlock()) {
                 block.draw(batch);
             }
+
             world.getFlag().draw(batch);
 
-            scoreFont.draw(batch, "Score: " + world.getScore(), 20, WORLD_HEIGHT - 20);
+            // UI 그리기
+            scoreFont.draw(batch, "HP: " + world.getPlayer().Hp, 20, WORLD_HEIGHT - 20);
+            scoreFont.draw(batch, "Score: " + world.getScore(), 20, WORLD_HEIGHT - 60);
+            scoreFont.draw(batch, "Stage: " + Level, 20, WORLD_HEIGHT - 100);
 
-
-            //Pause 이미지 그리기
-            if (currentState == GameState.PAUSE) {
+            if(currentState == GameState.PAUSE) {
                 batch.draw(pauseTexture, 640 - (pauseTexture.getWidth() / 2), 360 - (pauseTexture.getHeight() / 2));
             }
+
+            batch.end(); // batch 끝내기
+
+            // 🔴 낭떠러지를 ShapeRenderer로 그리기 (batch 종료 후)
+            shapeRenderer.setProjectionMatrix(camera.combined);
+            shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+            shapeRenderer.setColor(1, 0, 0, 0.3f); // 반투명 빨강
+
+            for(Rectangle pit : world.getPits()) {
+                shapeRenderer.rect(pit.x, pit.y, pit.width, pit.height);
+            }
+
+            shapeRenderer.end();
+
+            batch.begin(); // 다시 batch 시작 (다음 프레임 준비)
+        }
+        else if(world.isGameOver) {
+            // 게임오버 화면
+            camera.position.set(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 0);
+            camera.update();
+            batch.setProjectionMatrix(camera.combined);
+
+            scoreFont.draw(batch, "GAME OVER", 500, 400);
+            scoreFont.draw(batch, "Score: " + world.getScore(), 500, 350);
+            scoreFont.draw(batch, "Press R to Restart", 450, 300);
+        }
+        else if(currentState == GameState.CLEARED) {
+            camera.position.set(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 0);
+            camera.update();
+            batch.setProjectionMatrix(camera.combined);
+
+            scoreFont.draw(batch, "GAME CLEAR!", 500, 400);
+            scoreFont.draw(batch, "Total Score: " + world.getScore(), 450, 350);
+            scoreFont.draw(batch, "Press R to Restart", 450, 300);
+        }
+        else if(currentState == GameState.STAGECLEARED) {
+            camera.position.set(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 0);
+            camera.update();
+            batch.setProjectionMatrix(camera.combined);
+
+            scoreFont.draw(batch, "Stage " + Level + " Clear!", 450, 400);
+            scoreFont.draw(batch, "Score: " + world.getScore(), 450, 350);
+            scoreFont.draw(batch, "Next Stage...", 450, 300);
         }
         else {
+            // 시작 화면
             camera.position.set(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 0);
             camera.update();
             batch.setProjectionMatrix(camera.combined);
 
             batch.draw(startTexture, 640 - (startTexture.getWidth()/2), 360 - (startTexture.getHeight()/2));
         }
-        batch.end();
 
+        batch.end();
     }
 
-    private void input() {
 
-        if(currentState == GameState.START)
-        {
-            if(Gdx.input.isKeyJustPressed(Keys.S))
-            {
+    private void input() {
+        if(currentState == GameState.START) {
+            if(Gdx.input.isKeyJustPressed(Keys.S)) {
                 currentState = GameState.RUNNING;
             }
         }
-        else
-        {
-            if(Gdx.input.isKeyJustPressed(Keys.R))
-            {
-                currentState = GameState.START;
-                reFlag = true;
-                resetCameraForStartScreen();
+        else if(currentState == GameState.RUNNING) {
+            // 게임 진행 중 키 처리
+            if (Gdx.input.isKeyPressed(Keys.SPACE)) {
+                world.onPlayerJump();
+            }
+            if (Gdx.input.isKeyPressed(Keys.ENTER)) {
+                currentState = GameState.PAUSE;
             }
         }
-        if (Gdx.input.isKeyPressed(Keys.RIGHT) && currentState == GameState.RUNNING) {
-            world.onPlayerRight();
-
-        } else if (Gdx.input.isKeyPressed(Keys.LEFT) && currentState == GameState.RUNNING) {
-            world.onPlayerLeft();
-
-        }
-        if (Gdx.input.isKeyPressed(Keys.SPACE) && currentState == GameState.RUNNING) {
-            world.onPlayerJump();
-        }
-        if (Gdx.input.isKeyPressed(Keys.ENTER)) {
-            currentState = GameState.PAUSE;
-        }
-        if (Gdx.input.isKeyPressed(Keys.ESCAPE)) {
-            currentState = GameState.RUNNING;
+        else if(currentState == GameState.PAUSE) {
+            if (Gdx.input.isKeyPressed(Keys.ESCAPE)) {
+                currentState = GameState.RUNNING;
+            }
         }
 
+        // 모든 게임오버, 클리어 상태에서 R키로 재시작 가능
+        if((world.isGameOver || currentState == GameState.CLEARED || currentState == GameState.STAGECLEARED)
+            && Gdx.input.isKeyJustPressed(Keys.R)) {
 
+            currentState = GameState.START;
+            reFlag = true;
+            resetCameraForStartScreen();
+        }
     }
+
 
     public void NewWorld(int level) {
         // 다시 새로운 객체를 생성 레벨에 따라 레벨을 코인의 속도에 곱합
@@ -221,6 +263,7 @@ public class Main extends ApplicationAdapter {
         playerTexture.dispose();
         objectTexture.dispose();
         scoreFont.dispose();
+        shapeRenderer.dispose();
         batch.dispose();
     }
 
@@ -235,9 +278,13 @@ public class Main extends ApplicationAdapter {
 
     // 카메라 매니저
     private void endingCheck() {
-        if (world.isGameClear() && (currentState != Main.GameState.CLEARED)) {
-            currentState = Main.GameState.CLEARED;
+        if (world.isGameClear() && (currentState != Main.GameState.CLEARED) && Level == 3) {
+            currentState = GameState.CLEARED;
             startEffect();
+        }
+        else if(world.isGameClear() && (currentState != Main.GameState.CLEARED) && Level != 3)
+        {
+            currentState = GameState.STAGECLEARED;
         }
     }
 

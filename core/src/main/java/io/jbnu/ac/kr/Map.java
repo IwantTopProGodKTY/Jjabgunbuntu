@@ -25,13 +25,25 @@ public class Map {
         coins = new Array<>();
         blocks = new Array<>();
 
-        createMap(level);
+        createStage(level*2, 500);
     }
 
 
-    public void createMap(int level)
+    public void createStage(int numberOfBlock, float spaceSize)
     {
+        float starX = 400 - Block.BlockWidth/2;
+        float starY = 0;
 
+        for (int i = 0; i<numberOfBlock; i++)
+        {
+            float x = starX + (i*spaceSize);
+
+            blocks.add(new Block(x,starY, blockTexture));
+            //blocks.add(new Block(x,starY+350, blockTexture));
+        }
+
+        //flag = new Flag(blocks.get(numberOfBlock-1).bounds.x + 400f,0,new Texture("flag.png"));
+        flag = new Flag(1999,0,new Texture("flag.png"));
     }
 
 
