@@ -27,6 +27,7 @@ public class GameWorld {
     private Texture blockTexture;
     private Texture platformTexture;
     private float worldWidth;
+    private int totalScore = 0;  // *** 누적 점수 ***
 
     public GameWorld(Texture playerTexture, Texture objectTexture, Texture blockTexture,
                      Texture platformTexture, float worldWidth, int level) {
@@ -35,6 +36,7 @@ public class GameWorld {
         this.blockTexture = blockTexture;
         this.platformTexture = platformTexture;
         this.worldWidth = worldWidth;
+
 
         player = new GameCharacter(playerTexture, 100, GROUND_Y + GROUND_HEIGHT);
         objects = new Array<>();
@@ -45,6 +47,8 @@ public class GameWorld {
         Level = level;
         loadGround(level);
     }
+
+
 
     public void update(float delta) {
         if(isGameOver || isGameClear) return;
@@ -188,7 +192,7 @@ public class GameWorld {
         if(player.sprite.getBoundingRectangle().overlaps(flag.bounds)) {
             isGameClear = true;
             score += 100;
-            System.out.println("Stage " + Level + " Clear! Total Score: " + score);
+            System.out.println("Stage " + Level + " Clear! Total Score: " + totalScore);
         }
     }
 
@@ -231,7 +235,9 @@ public class GameWorld {
                     platforms.add(platform);
                 }
 
-                // 900~1000: 낭떠러지 (플랫폼 없음)
+                // 900~1000: 낭떠러지 (플랫폼 없음) + 코인 (가운데)
+                objects.add(new CoinObject(objectTexture, 910, GROUND_Y + GROUND_HEIGHT + 50, 0));
+
 
                 // 1000~1500: 플랫폼 + 장애물(1500)
                 for(int i = 10; i < 15; i++) {
@@ -247,6 +253,7 @@ public class GameWorld {
                 }
 
                 // 1900~2000: 낭떠러지 (플랫폼 없음)
+                objects.add(new CoinObject(objectTexture, 1910, GROUND_Y + GROUND_HEIGHT + 50, 0));
 
                 // 2000~2500: 플랫폼 + 장애물(2500)
                 for(int i = 20; i < 25; i++) {
@@ -281,7 +288,10 @@ public class GameWorld {
                     platforms.add(platform);
                 }
 
+
+
                 // 900~1000: 낭떠러지
+                objects.add(new CoinObject(objectTexture, 910, GROUND_Y + GROUND_HEIGHT + 50, 0));
 
                 // 1000~1500: 플랫폼 + 장애물(1500) + 코인
                 for(int i = 10; i < 15; i++) {
@@ -298,6 +308,7 @@ public class GameWorld {
                 }
 
                 // 1900~2000: 낭떠러지
+                objects.add(new CoinObject(objectTexture, 1910, GROUND_Y + GROUND_HEIGHT + 50, 0));
 
                 // 2000~2500: 플랫폼 + 장애물(2500) + 코인
                 for(int i = 20; i < 25; i++) {
@@ -331,9 +342,14 @@ public class GameWorld {
         }
     }
 
+    public void setTotalScore(int score) {
+        totalScore = score;
+        this.score = 0;  // 현재 스테이지 점수는 0부터
+    }
 
-
-    public int getScore() { return score; }
+    public int getScore() {
+        return totalScore + score;  // 누적 점수 + 현재 점수
+    }
     public Array<CoinObject> getObjects() { return objects; }
     public Array<Block> getBlock() { return blocks; }
     public Array<Rectangle> getPlatforms() { return platforms; }

@@ -33,7 +33,7 @@ public class Main extends ApplicationAdapter {
     Sound effectSound;
 
     GameWorld world;
-    public int Level = 2;
+    public int Level = 1;
     private Texture objectTexture; // 떨어지는 오브젝트 텍스처
     private Texture playerTexture;
     private Texture pauseTexture;
@@ -246,7 +246,7 @@ public class Main extends ApplicationAdapter {
         }
 
         // 모든 게임오버, 클리어 상태에서 R키로 재시작 가능
-        if((world.isGameOver || currentState == GameState.CLEARED || currentState == GameState.STAGECLEARED)
+        if((world.isGameOver || currentState == GameState.CLEARED)
             && Gdx.input.isKeyJustPressed(Keys.R)) {
 
             currentState = GameState.START;
@@ -256,11 +256,18 @@ public class Main extends ApplicationAdapter {
     }
 
 
+    // NewWorld() 메서드 수정
     public void NewWorld(int level) {
-        // 다시 새로운 객체를 생성 레벨에 따라 레벨을 코인의 속도에 곱합
+        int previousScore = world.getScore();  // *** 이전 점수 저장 ***
+
+        // 새로운 월드 생성
         world = new GameWorld(playerTexture, objectTexture, blockTexture, platformTexture, this.WORLD_WIDTH, level);
 
+        // *** 이전 점수 전달 ***
+        if(currentState != GameState.START)
+            world.setTotalScore(previousScore);
     }
+
 
     @Override
     public void dispose() {
