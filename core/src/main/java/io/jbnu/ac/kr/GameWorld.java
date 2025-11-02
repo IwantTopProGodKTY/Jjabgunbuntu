@@ -1,6 +1,5 @@
 package io.jbnu.ac.kr;
 
-import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.Array;
@@ -8,12 +7,13 @@ import java.util.Iterator;
 
 public class GameWorld {
     public final float WORLD_GRAVITY = -9.8f * 200;
-    public final float FLOOR_LEVEL = 100;
     public final float DEATH_LINE = 0;
+    public final float GROUND_Y = 50;        // 플랫폼 Y 위치
+    public final float GROUND_HEIGHT = 50;   // 플랫폼 높이 *** 중요! ***
 
     private GameCharacter player;
     private Array<Block> blocks;
-    private Array<Rectangle> pits;
+    private Array<Rectangle> platforms;
     private Array<CoinObject> objects;
     private Flag flag;
 
@@ -25,72 +25,68 @@ public class GameWorld {
     private Texture playerTexture;
     private Texture objectTexture;
     private Texture blockTexture;
-
+    private Texture platformTexture;
     private float worldWidth;
 
-    // 무적 시간 관련
-    private float invincibleTimer = 0f;
-    private final float INVINCIBLE_TIME = 2f; // 2초 무적
-
-    public GameWorld(Texture playerTexture, Texture objectTexture, Texture blockTexture, float worldWidth, int level) {
+    public GameWorld(Texture playerTexture, Texture objectTexture, Texture blockTexture,
+                     Texture platformTexture, float worldWidth, int level) {
         this.playerTexture = playerTexture;
         this.objectTexture = objectTexture;
         this.blockTexture = blockTexture;
+        this.platformTexture = platformTexture;
         this.worldWidth = worldWidth;
 
-        player = new GameCharacter(playerTexture, 100, FLOOR_LEVEL);
+        player = new GameCharacter(playerTexture, 100, GROUND_Y + GROUND_HEIGHT);
         objects = new Array<>();
         blocks = new Array<>();
-        pits = new Array<>();
+        platforms = new Array<>();
 
         score = 0;
         Level = level;
-        invincibleTimer = 0f;
-
         loadGround(level);
     }
 
     public void update(float delta) {
         if(isGameOver || isGameClear) return;
 
-        float moveAmount = 7; // 자동 오른쪽 이동
+        float moveAmount = 7;
 
         // 중력 적용
         player.velocity.y += WORLD_GRAVITY * delta;
 
-        // 무적 시간 감소
-        if(invincibleTimer > 0) {
-            invincibleTimer -= delta;
-        }
-
-        // Y축 이동 (중력)
+        // Y축 이동
         float newY = player.position.y + player.velocity.y * delta;
+        checkBlockCollisionY(newY);
 
-        // 바닥 및 낭떠러지 충돌 검사 (Y 위치 결정)
-        checkFloorAndPitCollision(newY);
+        // 플랫폼(땅) 착지 (Y축 이동 후)
+        checkPlatformCollision();
 
         // X축 이동
-        player.position.x += moveAmount;
+        float newX = player.position.x + moveAmount + player.velocity.x * delta;
+        player.position.x = newX;
         player.sprite.setX(player.position.x);
 
-        // 장애물 충돌 검사 (무적 시간 중이 아닐 때만)
-        if(invincibleTimer <= 0) {
-            checkBlockCollision();
+        // X축 속도 감속
+        if(Math.abs(player.velocity.x) > 0) {
+            player.velocity.x *= 0.95f;
         }
 
-        // 코인 충돌 검사
+        // X축 블록 충돌
+        checkBlockCollisionX();
+
+        // 코인 충돌
         checkCoinCollision();
 
-        // 깃발 충돌 검사
+        // 깃발 충돌
         checkFlagCollision();
 
-        // Y < 0이면 게임오버 (낭떠러지)
-        if(player.position.y < DEATH_LINE) {
+        // Y <= 0이면 낭떠러지 추락
+        if(player.position.y <= DEATH_LINE) {
             isGameOver = true;
             System.out.println("Fell into pit! GAME OVER");
         }
 
-        // 체력 <= 0이면 게임오버
+        // 체력 <= 0
         if(player.Hp <= 0) {
             isGameOver = true;
             System.out.println("HP 0! GAME OVER");
@@ -99,61 +95,80 @@ public class GameWorld {
         player.syncSpriteToPosition();
     }
 
-    // 바닥 및 낭떠러지 충돌 처리
-    private void checkFloorAndPitCollision(float newY) {
-        Rectangle playerBounds = new Rectangle(player.position.x, newY,
-            player.sprite.getWidth(), player.sprite.getHeight());
+    // Y축 블록 충돌
+    private void checkBlockCollisionY(float newY) {
+        Rectangle futurePlayerBounds = new Rectangle(
+            player.position.x, newY,
+            player.sprite.getWidth(), player.sprite.getHeight()
+        );
 
-        boolean inPit = false;
-
-        // 낭떠러지 구간에 플레이어가 있는지 확인
-        for(Rectangle pit : pits) {
-            if(playerBounds.overlaps(pit)) {
-                inPit = true;
-                break;
+        for(Block block : blocks) {
+            if(futurePlayerBounds.overlaps(block.getBounds())) {
+                player.Hp--;
+                player.position.x = block.getBounds().x - player.sprite.getWidth() - 5;
+                player.velocity.x = -1500f;
+                player.velocity.y = 600f;
+                System.out.println("Hit block! HP: " + player.Hp);
+                return;
             }
         }
 
-        // 낭떠러지가 아니면 바닥에 고정
-        if(!inPit) {
-            if(newY <= FLOOR_LEVEL) {
-                player.position.y = FLOOR_LEVEL;
-                player.velocity.y = 0;
-                player.isGrounded = true;
-            } else {
-                player.position.y = newY;
-                player.isGrounded = false;
-            }
-        } else {
-            // 낭떠러지 구간이면 그냥 떨어짐
-            player.position.y = newY;
-            player.isGrounded = false;
-        }
+        player.position.y = newY;
     }
 
-    // 장애물 충돌 검사
-    private void checkBlockCollision() {
+    // X축 블록 충돌
+    private void checkBlockCollisionX() {
         Rectangle playerBounds = player.sprite.getBoundingRectangle();
 
         for(Block block : blocks) {
             if(playerBounds.overlaps(block.getBounds())) {
-                // 체력 1 감소
                 player.Hp--;
-
-                // 무적 시간 부여 (2초 동안 충돌 안함)
-                invincibleTimer = INVINCIBLE_TIME;
-
-                // 뒤로 밀려남
-                player.position.x -= 80; // 더 멀리 밀려남
-                player.velocity.y = 300f; // 약간 위로 튕김
-
-                System.out.println("Hit Block! HP: " + player.Hp + " | Invincible for " + INVINCIBLE_TIME + "s");
+                player.position.x = block.getBounds().x - player.sprite.getWidth() - 5;
+                player.velocity.x = -1500f;
+                player.velocity.y = 600f;
+                System.out.println("Hit Block! HP: " + player.Hp);
                 break;
             }
         }
     }
 
-    // 코인 충돌 검사
+    // *** 플랫폼 착지 ***
+    private void checkPlatformCollision() {
+        Rectangle playerBounds = new Rectangle(
+            player.position.x, player.position.y,
+            player.sprite.getWidth(), player.sprite.getHeight()
+        );
+
+        boolean onPlatform = false;
+
+        // 플랫폼과의 충돌 검사
+        for(Rectangle platform : platforms) {
+            // X축 겹침 확인
+            if(playerBounds.x + playerBounds.width > platform.x &&
+                playerBounds.x < platform.x + platform.width) {
+
+                // Y축에서 플랫폼 위에 있는지 확인
+                if(playerBounds.y >= platform.y + platform.height - 5 &&
+                    playerBounds.y <= platform.y + platform.height + 10 &&
+                    player.velocity.y <= 0) {  // 위에서 내려오는 중
+
+                    player.position.y = platform.y + platform.height;
+                    player.velocity.y = 0;
+                    player.isGrounded = true;
+                    onPlatform = true;
+                    System.out.println("Landed on platform at Y=" + player.position.y);
+                    return;
+                }
+            }
+        }
+
+        // 플랫폼이 없으면 추락 중
+        if(!onPlatform) {
+            player.isGrounded = false;
+        }
+    }
+
+    // 코인 충돌
     private void checkCoinCollision() {
         Rectangle playerBounds = player.sprite.getBoundingRectangle();
 
@@ -168,69 +183,160 @@ public class GameWorld {
         }
     }
 
-    // 깃발 충돌 검사
+    // 깃발 충돌
     private void checkFlagCollision() {
         if(player.sprite.getBoundingRectangle().overlaps(flag.bounds)) {
             isGameClear = true;
-            score += 100; // 완주 보너스
+            score += 100;
             System.out.println("Stage " + Level + " Clear! Total Score: " + score);
         }
     }
 
-    // 레벨별 맵 생성
+    // *** 레벨별 맵 생성 ***
     private void loadGround(int level) {
         blocks.clear();
-        pits.clear();
+        platforms.clear();
         objects.clear();
+
+        // 플랫폼 크기: 100
+        final float PLATFORM_WIDTH = 100;
 
         switch(level) {
             case 1:
-                // 1스테이지: 장애물만
-                blocks.add(new Block(500, FLOOR_LEVEL, blockTexture));
-                blocks.add(new Block(1000, FLOOR_LEVEL, blockTexture));
-                blocks.add(new Block(1500, FLOOR_LEVEL, blockTexture));
-                System.out.println("=== Stage 1 Loaded ===");
+                // 1스테이지: 전체 플랫폼 + 500마다 장애물
+                createFullPlatforms(3000, PLATFORM_WIDTH);
+
+                // 장애물: 500, 1000, 1500, 2000, 2500
+                blocks.add(new Block(500, GROUND_Y + GROUND_HEIGHT, blockTexture));
+                blocks.add(new Block(1000, GROUND_Y + GROUND_HEIGHT, blockTexture));
+                blocks.add(new Block(1500, GROUND_Y + GROUND_HEIGHT, blockTexture));
+                blocks.add(new Block(2000, GROUND_Y + GROUND_HEIGHT, blockTexture));
+                blocks.add(new Block(2500, GROUND_Y + GROUND_HEIGHT, blockTexture));
+
+                System.out.println("Stage 1 loaded - Obstacles at 500, 1000, 1500, 2000, 2500");
                 break;
 
             case 2:
-                // 2스테이지: 낭떠러지와 장애물 번갈아
-                for(int i = 0; i < 7; i++) {
-                    float x = 250 + (250 * i);
-                    if(i % 2 == 0) {
-                        pits.add(new Rectangle(x, 0, 100, FLOOR_LEVEL));
-                        System.out.println("Pit at x=" + x);
-                    } else {
-                        blocks.add(new Block(x, FLOOR_LEVEL, blockTexture));
-                        System.out.println("Block at x=" + x);
-                    }
+                // 2스테이지: 특정 배치
+                // 0~500: 플랫폼 + 장애물(500)
+                for(int i = 0; i < 5; i++) {
+                    Rectangle platform = new Rectangle(i * PLATFORM_WIDTH, GROUND_Y, PLATFORM_WIDTH, GROUND_HEIGHT);
+                    platforms.add(platform);
                 }
-                System.out.println("=== Stage 2 Loaded ===");
+                blocks.add(new Block(500, GROUND_Y + GROUND_HEIGHT, blockTexture));
+
+                // 500~900: 플랫폼
+                for(int i = 5; i < 9; i++) {
+                    Rectangle platform = new Rectangle(i * PLATFORM_WIDTH, GROUND_Y, PLATFORM_WIDTH, GROUND_HEIGHT);
+                    platforms.add(platform);
+                }
+
+                // 900~1000: 낭떠러지 (플랫폼 없음)
+
+                // 1000~1500: 플랫폼 + 장애물(1500)
+                for(int i = 10; i < 15; i++) {
+                    Rectangle platform = new Rectangle(i * PLATFORM_WIDTH, GROUND_Y, PLATFORM_WIDTH, GROUND_HEIGHT);
+                    platforms.add(platform);
+                }
+                blocks.add(new Block(1500, GROUND_Y + GROUND_HEIGHT, blockTexture));
+
+                // 1500~1900: 플랫폼
+                for(int i = 15; i < 19; i++) {
+                    Rectangle platform = new Rectangle(i * PLATFORM_WIDTH, GROUND_Y, PLATFORM_WIDTH, GROUND_HEIGHT);
+                    platforms.add(platform);
+                }
+
+                // 1900~2000: 낭떠러지 (플랫폼 없음)
+
+                // 2000~2500: 플랫폼 + 장애물(2500)
+                for(int i = 20; i < 25; i++) {
+                    Rectangle platform = new Rectangle(i * PLATFORM_WIDTH, GROUND_Y, PLATFORM_WIDTH, GROUND_HEIGHT);
+                    platforms.add(platform);
+                }
+                blocks.add(new Block(2500, GROUND_Y + GROUND_HEIGHT, blockTexture));
+
+                // 2500~3000: 플랫폼
+                for(int i = 25; i < 30; i++) {
+                    Rectangle platform = new Rectangle(i * PLATFORM_WIDTH, GROUND_Y, PLATFORM_WIDTH, GROUND_HEIGHT);
+                    platforms.add(platform);
+                }
+
+                System.out.println("Stage 2 loaded - Obstacles at 500, 1500, 2500 / Pits at 900-1000, 1900-2000");
                 break;
 
             case 3:
-                // 3스테이지: 낭떠러지, 장애물, 코인
-                for(int i = 0; i < 7; i++) {
-                    float x = 250 + (250 * i);
-                    if(i % 2 == 0) {
-                        pits.add(new Rectangle(x, 0, 100, FLOOR_LEVEL));
-                    } else {
-                        blocks.add(new Block(x, FLOOR_LEVEL, blockTexture));
-                        objects.add(new CoinObject(objectTexture, x + 10, FLOOR_LEVEL + 70, 0));
-                    }
+                // 3스테이지: 2와 같은 배치에 코인 추가
+
+                // 0~500: 플랫폼 + 장애물(500) + 코인
+                for(int i = 0; i < 5; i++) {
+                    Rectangle platform = new Rectangle(i * PLATFORM_WIDTH, GROUND_Y, PLATFORM_WIDTH, GROUND_HEIGHT);
+                    platforms.add(platform);
                 }
-                System.out.println("=== Stage 3 Loaded ===");
+                blocks.add(new Block(500, GROUND_Y + GROUND_HEIGHT, blockTexture));
+                objects.add(new CoinObject(objectTexture, 500, GROUND_Y + GROUND_HEIGHT + 50, 0));
+
+                // 500~900: 플랫폼
+                for(int i = 5; i < 9; i++) {
+                    Rectangle platform = new Rectangle(i * PLATFORM_WIDTH, GROUND_Y, PLATFORM_WIDTH, GROUND_HEIGHT);
+                    platforms.add(platform);
+                }
+
+                // 900~1000: 낭떠러지
+
+                // 1000~1500: 플랫폼 + 장애물(1500) + 코인
+                for(int i = 10; i < 15; i++) {
+                    Rectangle platform = new Rectangle(i * PLATFORM_WIDTH, GROUND_Y, PLATFORM_WIDTH, GROUND_HEIGHT);
+                    platforms.add(platform);
+                }
+                blocks.add(new Block(1500, GROUND_Y + GROUND_HEIGHT, blockTexture));
+                objects.add(new CoinObject(objectTexture, 1500, GROUND_Y + GROUND_HEIGHT + 50, 0));
+
+                // 1500~1900: 플랫폼
+                for(int i = 15; i < 19; i++) {
+                    Rectangle platform = new Rectangle(i * PLATFORM_WIDTH, GROUND_Y, PLATFORM_WIDTH, GROUND_HEIGHT);
+                    platforms.add(platform);
+                }
+
+                // 1900~2000: 낭떠러지
+
+                // 2000~2500: 플랫폼 + 장애물(2500) + 코인
+                for(int i = 20; i < 25; i++) {
+                    Rectangle platform = new Rectangle(i * PLATFORM_WIDTH, GROUND_Y, PLATFORM_WIDTH, GROUND_HEIGHT);
+                    platforms.add(platform);
+                }
+                blocks.add(new Block(2500, GROUND_Y + GROUND_HEIGHT, blockTexture));
+                objects.add(new CoinObject(objectTexture, 2500, GROUND_Y + GROUND_HEIGHT + 50, 0));
+
+                // 2500~3000: 플랫폼
+                for(int i = 25; i < 30; i++) {
+                    Rectangle platform = new Rectangle(i * PLATFORM_WIDTH, GROUND_Y, PLATFORM_WIDTH, GROUND_HEIGHT);
+                    platforms.add(platform);
+                }
+
+                System.out.println("Stage 3 loaded - Obstacles with coins at 500, 1500, 2500 / Pits at 900-1000, 1900-2000");
                 break;
         }
 
-        // 깃발 생성
-        flag = new Flag(1999, FLOOR_LEVEL, new Texture("flag.png"));
+        flag = new Flag(2999, GROUND_Y + GROUND_HEIGHT, new Texture("flag.png"));
     }
 
-    // Getter들
+    // 1스테이지용: 전체 플랫폼 생성
+    private void createFullPlatforms(float mapLength, float platformWidth) {
+        for(int i = 0; i < mapLength / platformWidth; i++) {
+            float x = i * platformWidth;
+            if(x >= mapLength) break;
+
+            Rectangle platform = new Rectangle(x, GROUND_Y, platformWidth, GROUND_HEIGHT);
+            platforms.add(platform);
+        }
+    }
+
+
+
     public int getScore() { return score; }
     public Array<CoinObject> getObjects() { return objects; }
     public Array<Block> getBlock() { return blocks; }
-    public Array<Rectangle> getPits() { return pits; }
+    public Array<Rectangle> getPlatforms() { return platforms; }
     public GameCharacter getPlayer() { return player; }
     public Flag getFlag() { return flag; }
     public void onPlayerJump() { player.jump(); }

@@ -10,7 +10,7 @@ public class GameCharacter {
     public Vector2 position;
     public Vector2 velocity;
     public Sprite sprite;
-    public int Hp = 3;
+    public int Hp = 5;
     public boolean isGrounded = false;
     public boolean isMovingRight = true;
     public boolean isMovingLeft = false;

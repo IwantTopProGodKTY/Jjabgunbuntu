@@ -33,12 +33,13 @@ public class Main extends ApplicationAdapter {
     Sound effectSound;
 
     GameWorld world;
-    public int Level = 1;
+    public int Level = 2;
     private Texture objectTexture; // 떨어지는 오브젝트 텍스처
     private Texture playerTexture;
     private Texture pauseTexture;
     private Texture blockTexture; // 블록 텍스쳐
     private Texture startTexture;
+    private Texture platformTexture;
     private BitmapFont scoreFont;
     private boolean reFlag; //R키를 눌렀을때 모든 월드를 초기화하기
 
@@ -72,10 +73,11 @@ public class Main extends ApplicationAdapter {
         pauseTexture = new Texture("pause.png");
         blockTexture = new Texture("block.png");
         startTexture = new Texture("start.png");
+        platformTexture = new Texture("ground.png");
         shapeRenderer = new ShapeRenderer();
 
         //월드 생성
-        world = new GameWorld(playerTexture, objectTexture, blockTexture, this.WORLD_WIDTH, Level);
+        world = new GameWorld(playerTexture, objectTexture, blockTexture,platformTexture, this.WORLD_WIDTH, Level);
 
 
 
@@ -142,9 +144,13 @@ public class Main extends ApplicationAdapter {
             camera.update();
             batch.setProjectionMatrix(viewport.getCamera().combined);
 
-            // 오브젝트 그리기 (batch 상태에서)
-            world.getPlayer().draw(batch);
+            // *** 플랫폼(땅) 렌더링 ***
+            for(Rectangle platform : world.getPlatforms()) {
+                batch.draw(platformTexture, platform.x, platform.y, platform.width, platform.height);
+            }
 
+            // 오브젝트 렌더링
+            world.getPlayer().draw(batch);
             for(CoinObject obj : world.getObjects()) {
                 obj.draw(batch);
             }
@@ -156,24 +162,22 @@ public class Main extends ApplicationAdapter {
             world.getFlag().draw(batch);
 
             // UI 그리기
-            scoreFont.draw(batch, "HP: " + world.getPlayer().Hp, 20, WORLD_HEIGHT - 20);
-            scoreFont.draw(batch, "Score: " + world.getScore(), 20, WORLD_HEIGHT - 60);
-            scoreFont.draw(batch, "Stage: " + Level, 20, WORLD_HEIGHT - 100);
+            scoreFont.draw(batch, "HP: " + world.getPlayer().Hp, camera.position.x-640, WORLD_HEIGHT - 20);
+            scoreFont.draw(batch, "Score: " + world.getScore(), camera.position.x-640, WORLD_HEIGHT - 60);
+            scoreFont.draw(batch, "Stage: " + Level, camera.position.x-640, WORLD_HEIGHT - 100);
 
             if(currentState == GameState.PAUSE) {
-                batch.draw(pauseTexture, 640 - (pauseTexture.getWidth() / 2), 360 - (pauseTexture.getHeight() / 2));
+                batch.draw(pauseTexture, camera.position.x - (pauseTexture.getWidth() / 2), camera.position.y - (pauseTexture.getHeight() / 2));
             }
 
             batch.end(); // batch 끝내기
 
-            // 🔴 낭떠러지를 ShapeRenderer로 그리기 (batch 종료 후)
+            // 낭떠러지를 ShapeRenderer로 그리기 (batch 종료 후)
             shapeRenderer.setProjectionMatrix(camera.combined);
             shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
             shapeRenderer.setColor(1, 0, 0, 0.3f); // 반투명 빨강
 
-            for(Rectangle pit : world.getPits()) {
-                shapeRenderer.rect(pit.x, pit.y, pit.width, pit.height);
-            }
+
 
             shapeRenderer.end();
 
@@ -254,7 +258,7 @@ public class Main extends ApplicationAdapter {
 
     public void NewWorld(int level) {
         // 다시 새로운 객체를 생성 레벨에 따라 레벨을 코인의 속도에 곱합
-        world = new GameWorld(playerTexture, objectTexture, blockTexture, this.WORLD_WIDTH, level);
+        world = new GameWorld(playerTexture, objectTexture, blockTexture, platformTexture, this.WORLD_WIDTH, level);
 
     }
 
