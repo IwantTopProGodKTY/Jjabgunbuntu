@@ -3,6 +3,7 @@ package io.jbnu.ac.kr;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.audio.Sound;
 import java.util.Iterator;
 
 public class GameWorld {
@@ -10,6 +11,9 @@ public class GameWorld {
     public final float DEATH_LINE = 0;
     public final float GROUND_Y = 50;        // 플랫폼 Y 위치
     public final float GROUND_HEIGHT = 50;   // 플랫폼 높이 *** 중요! ***
+
+    private Sound hitSound;
+    private Sound clearSound;
 
     private GameCharacter player;
     private Array<Block> blocks;
@@ -30,15 +34,16 @@ public class GameWorld {
     private int totalScore = 0;  // *** 누적 점수 ***
 
     public GameWorld(Texture playerTexture, Texture objectTexture, Texture blockTexture,
-                     Texture platformTexture, float worldWidth, int level) {
+                     Texture platformTexture,Sound hitSound, Sound clearSound,  float worldWidth, int level) {
         this.playerTexture = playerTexture;
         this.objectTexture = objectTexture;
         this.blockTexture = blockTexture;
         this.platformTexture = platformTexture;
         this.worldWidth = worldWidth;
+        this.hitSound = hitSound;
+        this.clearSound = clearSound;
 
-
-        player = new GameCharacter(playerTexture, 100, GROUND_Y + GROUND_HEIGHT);
+        player = new GameCharacter(playerTexture, 0, GROUND_Y + GROUND_HEIGHT);
         objects = new Array<>();
         blocks = new Array<>();
         platforms = new Array<>();
@@ -112,15 +117,18 @@ public class GameWorld {
                 player.position.x = block.getBounds().x - player.sprite.getWidth() - 5;
                 player.velocity.x = -1500f;
                 player.velocity.y = 600f;
+
+                // *** 충돌음 재생 ***
+                hitSound.play(0.5f);
+
                 System.out.println("Hit block! HP: " + player.Hp);
                 return;
             }
         }
-
         player.position.y = newY;
     }
 
-    // X축 블록 충돌
+    // checkBlockCollisionX() 메서드 수정
     private void checkBlockCollisionX() {
         Rectangle playerBounds = player.sprite.getBoundingRectangle();
 
@@ -130,6 +138,10 @@ public class GameWorld {
                 player.position.x = block.getBounds().x - player.sprite.getWidth() - 5;
                 player.velocity.x = -1500f;
                 player.velocity.y = 600f;
+
+                // *** 충돌음 재생 ***
+                hitSound.play(0.5f);
+
                 System.out.println("Hit Block! HP: " + player.Hp);
                 break;
             }
@@ -160,7 +172,6 @@ public class GameWorld {
                     player.velocity.y = 0;
                     player.isGrounded = true;
                     onPlatform = true;
-                    System.out.println("Landed on platform at Y=" + player.position.y);
                     return;
                 }
             }
@@ -192,7 +203,11 @@ public class GameWorld {
         if(player.sprite.getBoundingRectangle().overlaps(flag.bounds)) {
             isGameClear = true;
             score += 100;
-            System.out.println("Stage " + Level + " Clear! Total Score: " + totalScore);
+
+            if(Level == 3)
+                clearSound.play(1.0f);
+
+            System.out.println("Stage " + Level + " Clear! Score: " + score);
         }
     }
 

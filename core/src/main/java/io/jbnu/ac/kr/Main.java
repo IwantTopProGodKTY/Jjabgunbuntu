@@ -19,6 +19,8 @@ import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
+import com.badlogic.gdx.audio.Music;
+
 
 
 import java.security.Key;
@@ -30,10 +32,14 @@ import java.util.Random;
 public class Main extends ApplicationAdapter {
 
     private SpriteBatch batch;
-    Sound effectSound;
+
+    private Music bgm;
+    private Sound hitSound;
+    private Sound clearSound;
 
     GameWorld world;
     public int Level = 1;
+    private Texture backgroundTexture;
     private Texture objectTexture; // 떨어지는 오브젝트 텍스처
     private Texture playerTexture;
     private Texture pauseTexture;
@@ -47,7 +53,6 @@ public class Main extends ApplicationAdapter {
     private OrthographicCamera camera;
     private Viewport viewport;
     public CameraManager camManager;
-    private ShapeRenderer shapeRenderer;
 
 
     private final float WORLD_WIDTH = 1280;
@@ -67,17 +72,20 @@ public class Main extends ApplicationAdapter {
     @Override
     public void create() {
         batch = new SpriteBatch();
-        effectSound = Gdx.audio.newSound(Gdx.files.internal("drop.mp3"));
+        bgm = Gdx.audio.newMusic(Gdx.files.internal("bgm.mp3"));
+        hitSound = Gdx.audio.newSound(Gdx.files.internal("hit.mp3"));
+        clearSound = Gdx.audio.newSound(Gdx.files.internal("clear.mp3"));
         playerTexture = new Texture("t.png");
         objectTexture = new Texture("coin.jpg");
         pauseTexture = new Texture("pause.png");
         blockTexture = new Texture("block.png");
         startTexture = new Texture("start.png");
         platformTexture = new Texture("ground.png");
-        shapeRenderer = new ShapeRenderer();
+        loadBackground(1);
+
 
         //월드 생성
-        world = new GameWorld(playerTexture, objectTexture, blockTexture,platformTexture, this.WORLD_WIDTH, Level);
+        world = new GameWorld(playerTexture, objectTexture, blockTexture,platformTexture, hitSound,clearSound ,this.WORLD_WIDTH, Level);
 
 
 
@@ -94,7 +102,8 @@ public class Main extends ApplicationAdapter {
         currentState = GameState.START;
         reFlag = false;
 
-
+        bgm.setLooping(true);
+        bgm.play();
 
     }
 
@@ -144,6 +153,11 @@ public class Main extends ApplicationAdapter {
             camera.update();
             batch.setProjectionMatrix(viewport.getCamera().combined);
 
+            batch.draw(backgroundTexture,
+                camera.position.x - WORLD_WIDTH/2,
+                0,
+                WORLD_WIDTH, WORLD_HEIGHT);
+
             // *** 플랫폼(땅) 렌더링 ***
             for(Rectangle platform : world.getPlatforms()) {
                 batch.draw(platformTexture, platform.x, platform.y, platform.width, platform.height);
@@ -170,18 +184,6 @@ public class Main extends ApplicationAdapter {
                 batch.draw(pauseTexture, camera.position.x - (pauseTexture.getWidth() / 2), camera.position.y - (pauseTexture.getHeight() / 2));
             }
 
-            batch.end(); // batch 끝내기
-
-            // 낭떠러지를 ShapeRenderer로 그리기 (batch 종료 후)
-            shapeRenderer.setProjectionMatrix(camera.combined);
-            shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-            shapeRenderer.setColor(1, 0, 0, 0.3f); // 반투명 빨강
-
-
-
-            shapeRenderer.end();
-
-            batch.begin(); // 다시 batch 시작 (다음 프레임 준비)
         }
         else if(world.isGameOver) {
             // 게임오버 화면
@@ -256,36 +258,40 @@ public class Main extends ApplicationAdapter {
     }
 
 
-    // NewWorld() 메서드 수정
+
     public void NewWorld(int level) {
-        int previousScore = world.getScore();  // *** 이전 점수 저장 ***
+        int previousScore = world.getScore();  // 이전 점수 저장
 
         // 새로운 월드 생성
-        world = new GameWorld(playerTexture, objectTexture, blockTexture, platformTexture, this.WORLD_WIDTH, level);
+        world = new GameWorld(playerTexture, objectTexture, blockTexture, platformTexture,hitSound,clearSound, this.WORLD_WIDTH, level);
 
-        // *** 이전 점수 전달 ***
+        loadBackground(level);
+        // 이전 점수
         if(currentState != GameState.START)
             world.setTotalScore(previousScore);
     }
 
+    private void loadBackground(int level) {
+        // 이전 배경 해제
+        if(backgroundTexture != null) {
+            backgroundTexture.dispose();
+        }
 
-    @Override
-    public void dispose() {
-        playerTexture.dispose();
-        objectTexture.dispose();
-        scoreFont.dispose();
-        shapeRenderer.dispose();
-        batch.dispose();
+        // 스테이지별 배경 이미지 로드
+        switch(level) {
+            case 1:
+                backgroundTexture = new Texture("background1.jpg");
+                break;
+            case 2:
+                backgroundTexture = new Texture("background2.jpg");
+                break;
+            case 3:
+                backgroundTexture = new Texture("background3.jpg");
+                break;
+            default:
+                backgroundTexture = new Texture("background1.jpg");
+        }
     }
-
-
-    //기존 카메라함수 오버라이드
-    @Override
-    public void resize(int width, int height) {
-        viewport.update(width, height, true);
-
-    }
-
 
     // 카메라 매니저
     private void endingCheck() {
@@ -318,5 +324,31 @@ public class Main extends ApplicationAdapter {
         viewport.setWorldSize(WORLD_WIDTH, WORLD_HEIGHT);
         viewport.apply(true);
     }
+
+
+    @Override
+    public void dispose() {
+        playerTexture.dispose();
+        objectTexture.dispose();
+        scoreFont.dispose();
+        batch.dispose();
+        bgm.dispose();
+        hitSound.dispose();
+        clearSound.dispose();
+        if(backgroundTexture != null) {
+            backgroundTexture.dispose();
+        }
+    }
+
+
+    //기존 카메라함수 오버라이드
+    @Override
+    public void resize(int width, int height) {
+        viewport.update(width, height, true);
+
+    }
+
+
+
 
 }
